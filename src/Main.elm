@@ -156,12 +156,12 @@ pageHeader model =
         [ a [ onClick (Navigate LeaderBoardPage) ] [ text "Race Results" ]
         , ul []
             [ li []
-                [ a [ href "#/runner", onClick (Navigate RunnerPage) ] [ text "Runner" ]
+                [ a [ onClick (Navigate RunnerPage) ] [ text "Add Runner" ]
                 ]
             ]
         , ul []
             [ li []
-                [ a [ href "#/login", onClick (Navigate LoginPage) ] [ text "Login" ]
+                [ a [ onClick (Navigate LoginPage) ] [ text "Login" ]
                 ]
             ]
         ]
@@ -183,7 +183,7 @@ hashToPage hash =
         "#/login" ->
             LoginPage
 
-        "#/runner" ->
+        "#/add" ->
             RunnerPage
 
         _ ->
@@ -200,7 +200,7 @@ pageToHash page =
             "#/login"
 
         RunnerPage ->
-            "#/runner"
+            "#/add"
 
         NotFound ->
             "#notfound"

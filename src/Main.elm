@@ -84,40 +84,28 @@ update msg model =
             let
                 ( lbModel, lbCmd ) =
                     LeaderBoard.update msg model.leaderBoard
-
-                newModel =
-                    { model | leaderBoard = lbModel }
-
-                newCmd =
-                    Cmd.map LeaderBoardMsg lbCmd
             in
-                ( newModel, newCmd )
+                ( { model | leaderBoard = lbModel }
+                , Cmd.map LeaderBoardMsg lbCmd
+                )
 
         LoginMsg msg ->
             let
                 ( loginModel, loginCmd ) =
                     Login.update msg model.login
-
-                newModel =
-                    { model | login = loginModel }
-
-                newCmd =
-                    Cmd.map LoginMsg loginCmd
             in
-                ( newModel, newCmd )
+                ( { model | login = loginModel }
+                , Cmd.map LoginMsg loginCmd
+                )
 
         RunnerMsg msg ->
             let
                 ( runnerModel, runnerCmd ) =
                     Runner.update msg model.runner
-
-                newModel =
-                    { model | runner = runnerModel }
-
-                newCmd =
-                    Cmd.map RunnerMsg runnerCmd
             in
-                ( newModel, newCmd )
+                ( { model | runner = runnerModel }
+                , Cmd.map RunnerMsg runnerCmd
+                )
 
 
 
@@ -217,21 +205,11 @@ locationToMsg location =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    let
-        lbSubscriptons =
-            LeaderBoard.subscriptions model.leaderBoard
-
-        loginSubscriptions =
-            Login.subscriptions model.login
-
-        runnerSubscriptions =
-            Runner.subscriptions model.runner
-    in
-        Sub.batch
-            [ Sub.map LeaderBoardMsg lbSubscriptons
-            , Sub.map LoginMsg loginSubscriptions
-            , Sub.map RunnerMsg runnerSubscriptions
-            ]
+    Sub.batch
+        [ model.leaderBoard |> LeaderBoard.subscriptions |> Sub.map LeaderBoardMsg
+        , model.login |> Login.subscriptions |> Sub.map LoginMsg
+        , model.runner |> Runner.subscriptions |> Sub.map RunnerMsg
+        ]
 
 
 main : Program Never Model Msg

@@ -12,14 +12,6 @@ import Runner
 -- model
 
 
-type alias Model =
-    { page : Page
-    , leaderBoard : LeaderBoard.Model
-    , login : Login.Model
-    , runner : Runner.Model
-    }
-
-
 type Page
     = NotFound
     | LeaderBoardPage
@@ -27,11 +19,36 @@ type Page
     | RunnerPage
 
 
-init : Navigation.Location -> ( Model, Cmd Msg )
-init location =
+securePages : List Page
+securePages =
+    [ RunnerPage ]
+
+
+pageOrLoginPage : Page -> Bool -> ( Page, Cmd Msg )
+pageOrLoginPage page loggedIn =
+    if loggedIn || not (List.member page securePages) then
+        ( page, Cmd.none )
+    else
+        ( LoginPage, pageToHash LoginPage |> Navigation.modifyUrl )
+
+
+type alias Model =
+    { page : Page
+    , leaderBoard : LeaderBoard.Model
+    , login : Login.Model
+    , runner : Runner.Model
+    , token : Maybe String
+    }
+
+
+init : Flags -> Navigation.Location -> ( Model, Cmd Msg )
+init flags location =
     let
         page =
             hashToPage location.hash
+
+        ( firstPage, firstCmd ) =
+            pageOrLoginPage page (flags.token /= Nothing)
 
         ( lbInitModel, lbInitCmd ) =
             LeaderBoard.init
@@ -43,10 +60,11 @@ init location =
             Runner.init
 
         initModel =
-            { page = page
+            { page = firstPage
             , leaderBoard = lbInitModel
             , login = loginInitModel
             , runner = runnerInitModel
+            , token = flags.token
             }
 
         initCmd =
@@ -54,9 +72,15 @@ init location =
                 [ Cmd.map LeaderBoardMsg lbInitCmd
                 , Cmd.map LoginMsg loginInitCmd
                 , Cmd.map RunnerMsg runnerInitCmd
+                , firstCmd
                 ]
     in
         ( initModel, initCmd )
+
+
+loggedIn : Model -> Bool
+loggedIn model =
+    model.token /= Nothing
 
 
 
@@ -69,6 +93,7 @@ type Msg
     | LeaderBoardMsg LeaderBoard.Msg
     | LoginMsg Login.Msg
     | RunnerMsg Runner.Msg
+    | Logout
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -78,7 +103,11 @@ update msg model =
             ( model, page |> pageToHash |> Navigation.newUrl )
 
         ChangePage page ->
-            ( { model | page = page }, Cmd.none )
+            let
+                ( newPage, newCmd ) =
+                    pageOrLoginPage page (loggedIn model)
+            in
+                ( { model | page = newPage }, newCmd )
 
         LeaderBoardMsg msg ->
             let
@@ -91,11 +120,25 @@ update msg model =
 
         LoginMsg msg ->
             let
-                ( loginModel, loginCmd ) =
+                ( loginModel, loginToken, loginCmd ) =
                     Login.update msg model.login
+
+                saveTokenCmd =
+                    case loginToken of
+                        Just jwt ->
+                            saveToken jwt
+
+                        Nothing ->
+                            Cmd.none
             in
-                ( { model | login = loginModel }
-                , Cmd.map LoginMsg loginCmd
+                ( { model
+                    | login = loginModel
+                    , token = loginToken
+                  }
+                , Cmd.batch
+                    [ Cmd.map LoginMsg loginCmd
+                    , saveTokenCmd
+                    ]
                 )
 
         RunnerMsg msg ->
@@ -106,6 +149,14 @@ update msg model =
                 ( { model | runner = runnerModel }
                 , Cmd.map RunnerMsg runnerCmd
                 )
+
+        Logout ->
+            ( { model | token = Nothing }
+            , Cmd.batch
+                [ deleteToken ()
+                , LeaderBoardPage |> pageToHash |> Navigation.modifyUrl
+                ]
+            )
 
 
 
@@ -144,15 +195,29 @@ pageHeader model =
         [ a [ onClick (Navigate LeaderBoardPage) ] [ text "Race Results" ]
         , ul []
             [ li []
-                [ a [ onClick (Navigate RunnerPage) ] [ text "Add Runner" ]
-                ]
+                [ addRunnerLinkView model ]
             ]
         , ul []
             [ li []
-                [ a [ onClick (Navigate LoginPage) ] [ text "Login" ]
-                ]
+                [ loginLinkView model ]
             ]
         ]
+
+
+addRunnerLinkView : Model -> Html Msg
+addRunnerLinkView model =
+    if loggedIn model then
+        a [ onClick (Navigate RunnerPage) ] [ text "Add Runner" ]
+    else
+        text ""
+
+
+loginLinkView : Model -> Html Msg
+loginLinkView model =
+    if loggedIn model then
+        a [ onClick Logout ] [ text "Logout" ]
+    else
+        a [ onClick (Navigate LoginPage) ] [ text "Login" ]
 
 
 
@@ -212,9 +277,27 @@ subscriptions model =
         ]
 
 
-main : Program Never Model Msg
+
+-- ports
+
+
+port saveToken : String -> Cmd msg
+
+
+port deleteToken : () -> Cmd msg
+
+
+
+-- main
+
+
+type alias Flags =
+    { token : Maybe String }
+
+
+main : Program Flags Model Msg
 main =
-    Navigation.program locationToMsg
+    Navigation.programWithFlags locationToMsg
         { init = init
         , update = update
         , view = view

@@ -3,9 +3,18 @@ module Login exposing (..)
 import Html exposing (..)
 import Html.Events exposing (..)
 import Html.Attributes exposing (..)
+import Http
+import Json.Encode as JE
+import Json.Decode as JD exposing (field)
+import Navigation
 
 
 -- model
+
+
+url : String
+url =
+    "http://localhost:5000/authenticate"
 
 
 type alias Model =
@@ -36,23 +45,62 @@ type Msg
     = UsernameInput String
     | PasswordInput String
     | Submit
+    | LoginResponse (Result Http.Error String)
     | Error String
 
 
-update : Msg -> Model -> ( Model, Cmd Msg )
+update : Msg -> Model -> ( Model, Maybe String, Cmd Msg )
 update msg model =
     case msg of
         UsernameInput username ->
-            ( { model | username = username }, Cmd.none )
+            ( { model | username = username }, Nothing, Cmd.none )
 
         PasswordInput password ->
-            ( { model | password = password }, Cmd.none )
+            ( { model | password = password }, Nothing, Cmd.none )
 
         Submit ->
-            ( model, Cmd.none )
+            let
+                body =
+                    [ ( "username", JE.string model.username )
+                    , ( "password", JE.string model.password )
+                    ]
+                        |> JE.object
+                        |> JE.encode 0
+                        |> Http.stringBody "application/json"
+
+                decoder =
+                    field "token" JD.string
+
+                request =
+                    Http.post url body decoder
+
+                cmd =
+                    Http.send LoginResponse request
+            in
+                ( model, Nothing, cmd )
+
+        LoginResponse (Ok token) ->
+            ( initModel, Just token, Navigation.newUrl "#/" )
+
+        LoginResponse (Err err) ->
+            let
+                errorMessage =
+                    case err of
+                        Http.BadStatus resp ->
+                            case resp.status.code of
+                                401 ->
+                                    resp.body
+
+                                _ ->
+                                    resp.status.message
+
+                        _ ->
+                            "Login Error!"
+            in
+                ( { model | error = Just errorMessage }, Nothing, Cmd.none )
 
         Error error ->
-            ( { model | error = Just error }, Cmd.none )
+            ( { model | error = Just error }, Nothing, Cmd.none )
 
 
 

@@ -164,8 +164,11 @@ update msg model =
 
         RunnerMsg msg ->
             let
+                token =
+                    Maybe.withDefault "" model.token
+
                 ( runnerModel, runnerCmd ) =
-                    Runner.update msg model.runner
+                    Runner.update msg model.runner token
             in
                 ( { model | runner = runnerModel }
                 , Cmd.map RunnerMsg runnerCmd

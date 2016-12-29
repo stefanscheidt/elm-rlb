@@ -29,7 +29,7 @@ pageOrLoginPage page loggedIn =
     if loggedIn || not (List.member page securePages) then
         ( page, Cmd.none )
     else
-        ( LoginPage, pageToHash LoginPage |> Navigation.modifyUrl )
+        ( LoginPage, LoginPage |> pageToHash |> Navigation.modifyUrl )
 
 
 type alias Model =
@@ -47,7 +47,7 @@ init flags location =
         page =
             hashToPage location.hash
 
-        ( firstPage, firstCmd ) =
+        ( securePage, secureCmd ) =
             pageOrLoginPage page (flags.token /= Nothing)
 
         ( lbInitModel, lbInitCmd ) =
@@ -60,7 +60,7 @@ init flags location =
             Runner.init
 
         initModel =
-            { page = firstPage
+            { page = securePage
             , leaderBoard = lbInitModel
             , login = loginInitModel
             , runner = runnerInitModel
@@ -72,7 +72,7 @@ init flags location =
                 [ Cmd.map LeaderBoardMsg lbInitCmd
                 , Cmd.map LoginMsg loginInitCmd
                 , Cmd.map RunnerMsg runnerInitCmd
-                , firstCmd
+                , secureCmd
                 ]
     in
         ( initModel, initCmd )
@@ -104,10 +104,10 @@ update msg model =
 
         ChangePage page ->
             let
-                ( newPage, newCmd ) =
+                ( securePage, secureCmd ) =
                     pageOrLoginPage page (loggedIn model)
             in
-                ( { model | page = newPage }, newCmd )
+                ( { model | page = securePage }, secureCmd )
 
         LeaderBoardMsg msg ->
             let

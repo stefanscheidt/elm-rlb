@@ -44,7 +44,7 @@ pageOrLoginPage page target loggedIn =
     else
         ( LoginPage
         , loginTarget page target
-        , LoginPage |> pageToHash |> Navigation.modifyUrl
+        , pageToCmd LoginPage
         )
 
 
@@ -121,7 +121,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Navigate page ->
-            ( model, page |> pageToHash |> Navigation.newUrl )
+            ( model, pageToCmd page )
 
         ChangePage page ->
             let
@@ -175,7 +175,7 @@ update msg model =
             ( { model | token = Nothing }
             , Cmd.batch
                 [ deleteToken ()
-                , LeaderBoardPage |> pageToHash |> Navigation.modifyUrl
+                , pageToCmd LeaderBoardPage
                 ]
             )
 
@@ -278,6 +278,11 @@ pageToHash page =
 
         NotFound ->
             "#notfound"
+
+
+pageToCmd : Page -> Cmd Msg
+pageToCmd page =
+    page |> pageToHash |> Navigation.modifyUrl
 
 
 locationToMsg : Navigation.Location -> Msg

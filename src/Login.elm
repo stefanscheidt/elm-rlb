@@ -21,6 +21,7 @@ type alias Model =
     { username : String
     , password : String
     , error : Maybe String
+    , target : String
     }
 
 
@@ -29,6 +30,7 @@ initModel =
     { username = ""
     , password = ""
     , error = Nothing
+    , target = "/#"
     }
 
 
@@ -49,8 +51,8 @@ type Msg
     | Error String
 
 
-update : Msg -> Model -> ( Model, Maybe String, Cmd Msg )
-update msg model =
+update : Msg -> Model -> String -> ( Model, Maybe String, Cmd Msg )
+update msg model target =
     case msg of
         UsernameInput username ->
             ( { model | username = username }, Nothing, Cmd.none )
@@ -77,10 +79,10 @@ update msg model =
                 cmd =
                     Http.send LoginResponse request
             in
-                ( model, Nothing, cmd )
+                ( { model | target = target }, Nothing, cmd )
 
         LoginResponse (Ok token) ->
-            ( initModel, Just token, Navigation.newUrl "#/" )
+            ( initModel, Just token, Navigation.newUrl model.target )
 
         LoginResponse (Err err) ->
             let

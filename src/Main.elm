@@ -24,16 +24,33 @@ securePages =
     [ RunnerPage ]
 
 
-pageOrLoginPage : Page -> Bool -> ( Page, Cmd Msg )
-pageOrLoginPage page loggedIn =
+loginTarget : Page -> String -> String
+loginTarget page target =
+    case page of
+        LoginPage ->
+            target
+
+        _ ->
+            pageToHash page
+
+
+pageOrLoginPage : Page -> String -> Bool -> ( Page, String, Cmd Msg )
+pageOrLoginPage page target loggedIn =
     if loggedIn || not (List.member page securePages) then
-        ( page, Cmd.none )
+        ( page
+        , loginTarget page target
+        , Cmd.none
+        )
     else
-        ( LoginPage, LoginPage |> pageToHash |> Navigation.modifyUrl )
+        ( LoginPage
+        , loginTarget page target
+        , LoginPage |> pageToHash |> Navigation.modifyUrl
+        )
 
 
 type alias Model =
     { page : Page
+    , target : String
     , leaderBoard : LeaderBoard.Model
     , login : Login.Model
     , runner : Runner.Model
@@ -44,11 +61,14 @@ type alias Model =
 init : Flags -> Navigation.Location -> ( Model, Cmd Msg )
 init flags location =
     let
-        page =
-            hashToPage location.hash
+        target =
+            location.hash
 
-        ( securePage, secureCmd ) =
-            pageOrLoginPage page (flags.token /= Nothing)
+        page =
+            hashToPage target
+
+        ( securePage, secureTarget, secureCmd ) =
+            pageOrLoginPage page target (flags.token /= Nothing)
 
         ( lbInitModel, lbInitCmd ) =
             LeaderBoard.init
@@ -61,6 +81,7 @@ init flags location =
 
         initModel =
             { page = securePage
+            , target = secureTarget
             , leaderBoard = lbInitModel
             , login = loginInitModel
             , runner = runnerInitModel
@@ -104,10 +125,10 @@ update msg model =
 
         ChangePage page ->
             let
-                ( securePage, secureCmd ) =
-                    pageOrLoginPage page (loggedIn model)
+                ( securePage, secureTarget, secureCmd ) =
+                    pageOrLoginPage page model.target (loggedIn model)
             in
-                ( { model | page = securePage }, secureCmd )
+                ( { model | page = securePage, target = secureTarget }, secureCmd )
 
         LeaderBoardMsg msg ->
             let
@@ -121,7 +142,7 @@ update msg model =
         LoginMsg msg ->
             let
                 ( loginModel, loginToken, loginCmd ) =
-                    Login.update msg model.login
+                    Login.update msg model.login model.target
 
                 saveTokenCmd =
                     case loginToken of

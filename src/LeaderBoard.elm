@@ -100,6 +100,22 @@ handleWsMsg wsMsg model =
                     , Cmd.none
                     )
 
+                "updated runner" ->
+                    let
+                        updatedRunners =
+                            model.runners
+                                |> List.map
+                                    (\r ->
+                                        if r.id == runner.id then
+                                            runner
+                                        else
+                                            r
+                                    )
+                    in
+                        ( { model | runners = updatedRunners }
+                        , Cmd.none
+                        )
+
                 _ ->
                     ( { model | error = Just ("Unknown message " ++ name) }
                     , Cmd.none

@@ -3,9 +3,18 @@ module LeaderBoard exposing (..)
 import Html exposing (..)
 import Html.Events exposing (..)
 import Html.Attributes exposing (..)
+import Json.Decode as JD
+import Json.Decode.Pipeline as JDP
+import Json.Encode as JE
+import WebSocket as WS
 
 
 -- model
+
+
+url : String
+url =
+    "ws://localhost:5000/runners"
 
 
 type alias Model =
@@ -29,25 +38,33 @@ type alias Runner =
     }
 
 
-tempRunners : List Runner
-tempRunners =
-    [ Runner "1" "James Moore" "Turlock CA" 42 1234 0 1 1463154945381 0.125
-    , Runner "2" "Meb Keflezighi" "Turlock CA" 41 1238 0 1 1463154945381 0.09
-    ]
-
-
 initModel : Model
 initModel =
     { error = Nothing
     , query = ""
-    , runners = tempRunners
+    , runners = []
     , active = False
     }
 
 
+initCmd : Cmd Msg
+initCmd =
+    WS.send url (encodeWsMsg "listen runners" JE.null)
+
+
 init : ( Model, Cmd Msg )
 init =
-    ( initModel, Cmd.none )
+    ( initModel, initCmd )
+
+
+encodeWsMsg : String -> JE.Value -> String
+encodeWsMsg name data =
+    JE.encode 0
+        (JE.object
+            [ ( "name", JE.string name )
+            , ( "data", data )
+            ]
+        )
 
 
 
@@ -57,6 +74,7 @@ init =
 type Msg
     = SearchInput String
     | Search
+    | WsMessage String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -67,6 +85,55 @@ update msg model =
 
         Search ->
             ( model, Cmd.none )
+
+        WsMessage wsMsg ->
+            handleWsMsg wsMsg model
+
+
+handleWsMsg : String -> Model -> ( Model, Cmd Msg )
+handleWsMsg wsMsg model =
+    case JD.decodeString wsMsgDecoder wsMsg of
+        Ok { name, runner } ->
+            case name of
+                "new runner" ->
+                    ( { model | runners = runner :: model.runners }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( { model | error = Just ("Unknown message " ++ name) }
+                    , Cmd.none
+                    )
+
+        Err err ->
+            ( { model | error = Just err }, Cmd.none )
+
+
+type alias RunnerWsMsg =
+    { name : String
+    , runner : Runner
+    }
+
+
+wsMsgDecoder : JD.Decoder RunnerWsMsg
+wsMsgDecoder =
+    JDP.decode RunnerWsMsg
+        |> JDP.required "name" JD.string
+        |> JDP.required "data" runnerDecoder
+
+
+runnerDecoder : JD.Decoder Runner
+runnerDecoder =
+    JDP.decode Runner
+        |> JDP.required "_id" JD.string
+        |> JDP.required "name" JD.string
+        |> JDP.required "location" JD.string
+        |> JDP.required "age" JD.int
+        |> JDP.required "bib" JD.int
+        |> JDP.hardcoded 0
+        |> JDP.required "lastMarkerDistance" JD.float
+        |> JDP.required "lastMarkerTime" JD.float
+        |> JDP.required "pace" JD.float
 
 
 
@@ -152,4 +219,4 @@ runnersHeader =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    WS.listen url WsMessage

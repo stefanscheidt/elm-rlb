@@ -1,11 +1,15 @@
 module LeaderBoard exposing (..)
 
+import Date
+import Date.Extra.Format as DateFormat
+import Date.Extra.Config.Config_en_us as DateConfig
 import Html exposing (..)
 import Html.Events exposing (..)
 import Html.Attributes exposing (..)
 import Json.Decode as JD
 import Json.Decode.Pipeline as JDP
 import Json.Encode as JE
+import Time
 import WebSocket as WS
 
 
@@ -36,6 +40,18 @@ type alias Runner =
     , lastMarkerTime : Float
     , pace : Float
     }
+
+
+advanceDistance : Time.Time -> Runner -> Runner
+advanceDistance time runner =
+    let
+        elapsedMinutes =
+            (time - runner.lastMarkerTime) / 1000 / 60
+    in
+        if runner.lastMarkerTime > 0 then
+            { runner | estimatedDistance = runner.lastMarkerDistance + (elapsedMinutes * runner.pace) }
+        else
+            runner
 
 
 initModel : Model
@@ -75,6 +91,7 @@ type Msg
     = SearchInput String
     | Search
     | WsMessage String
+    | Tick Time.Time
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -89,6 +106,9 @@ update msg model =
         WsMessage wsMsg ->
             handleWsMsg wsMsg model
 
+        Tick time ->
+            ( tick model time, Cmd.none )
+
 
 handleWsMsg : String -> Model -> ( Model, Cmd Msg )
 handleWsMsg wsMsg model =
@@ -100,7 +120,7 @@ handleWsMsg wsMsg model =
                     , Cmd.none
                     )
 
-                "updated runner" ->
+                "update runner" ->
                     let
                         updatedRunners =
                             model.runners
@@ -152,8 +172,31 @@ runnerDecoder =
         |> JDP.required "pace" JD.float
 
 
+tick : Model -> Time.Time -> Model
+tick model time =
+    { model | runners = List.map (advanceDistance time) model.runners }
+
+
 
 -- view
+
+
+formatDistance : Float -> String
+formatDistance distance =
+    if distance <= 0 then
+        ""
+    else
+        toString ((toFloat (round (distance * 100))) / 100)
+
+
+formatTime : Time.Time -> String
+formatTime time =
+    if time > 0 then
+        time
+            |> Date.fromTime
+            |> DateFormat.format DateConfig.config "%H:%M:%S %P"
+    else
+        ""
 
 
 view : Model -> Html Msg
@@ -202,17 +245,29 @@ runners { query, runners } =
 
 
 runner : Runner -> Html Msg
-runner { name, location, age, bib, estimatedDistance } =
+runner runner =
     tr []
-        [ td [] [ text name ]
-        , td [] [ text location ]
-        , td [] [ text (toString age) ]
-        , td [] [ text (toString bib) ]
+        [ td [] [ text runner.name ]
+        , td [] [ text runner.location ]
+        , td [] [ text (toString runner.age) ]
+        , td [] [ text (toString runner.bib) ]
         , td []
-            [ text "1 mi @ 08:30AM (TODO)"
+            [ lastMarker runner
             ]
-        , td [] [ text (toString estimatedDistance) ]
+        , td [] [ text (formatDistance runner.estimatedDistance) ]
         ]
+
+
+lastMarker : Runner -> Html Msg
+lastMarker runner =
+    if runner.lastMarkerDistance > 0 then
+        text
+            ((formatDistance runner.lastMarkerDistance)
+                ++ " mi @ "
+                ++ (formatTime runner.lastMarkerTime)
+            )
+    else
+        text ""
 
 
 runnersHeader : Html Msg
@@ -235,4 +290,7 @@ runnersHeader =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    WS.listen url WsMessage
+    Sub.batch
+        [ WS.listen url WsMessage
+        , Time.every Time.second Tick
+        ]

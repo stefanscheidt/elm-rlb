@@ -9,6 +9,7 @@ import Html.Attributes exposing (..)
 import Json.Decode as JD
 import Json.Decode.Pipeline as JDP
 import Json.Encode as JE
+import String
 import Time
 import WebSocket as WS
 
@@ -24,6 +25,7 @@ url =
 type alias Model =
     { error : Maybe String
     , query : String
+    , searchTerm : Maybe String
     , runners : List Runner
     , active : Bool
     }
@@ -54,10 +56,24 @@ advanceDistance time runner =
             runner
 
 
+descComparison : Runner -> Runner -> Order
+descComparison a b =
+    case compare a.estimatedDistance b.estimatedDistance of
+        LT ->
+            GT
+
+        EQ ->
+            EQ
+
+        GT ->
+            LT
+
+
 initModel : Model
 initModel =
     { error = Nothing
     , query = ""
+    , searchTerm = Nothing
     , runners = []
     , active = False
     }
@@ -101,7 +117,14 @@ update msg model =
             ( { model | query = query }, Cmd.none )
 
         Search ->
-            ( model, Cmd.none )
+            let
+                searchTerm =
+                    if String.isEmpty model.query then
+                        Nothing
+                    else
+                        Just model.query
+            in
+                ( { model | searchTerm = searchTerm }, Cmd.none )
 
         WsMessage wsMsg ->
             handleWsMsg wsMsg model
@@ -236,12 +259,21 @@ searchForm query =
 
 
 runners : Model -> Html Msg
-runners { query, runners } =
+runners { runners, searchTerm } =
     runners
+        |> List.filter (showRunner searchTerm)
+        |> List.sortWith descComparison
         |> List.map runner
         |> tbody []
         |> (\r -> runnersHeader :: [ r ])
         |> table []
+
+
+showRunner : Maybe String -> Runner -> Bool
+showRunner searchTerm runner =
+    searchTerm
+        |> Maybe.map (\term -> String.contains term runner.name)
+        |> Maybe.withDefault True
 
 
 runner : Runner -> Html Msg
